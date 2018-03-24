@@ -16,17 +16,24 @@ struct BigStruct
     std::array<int, 100> arr{};
 };
 
+template <typename T>
+void ThrowInATemplate(int x)
+{
+    if (x)
+        THROW_REGISTERED_EXCEPTION(std::runtime_error, "");
+}
+
 // Note we cannot make these helper functions static as the compiler would optimize away the non-zero case
 void ThrowIfZeroStackParameter(BigStruct s)
 {
     if (!s.arr.back())
-        THROW_REGISETERED_EXCEPTION(std::exception);
+        THROW_REGISTERED_EXCEPTION(std::exception);
 }
 
 void ThrowIfNonZero(int x)
 {
     if (x)
-        THROW_REGISETERED_EXCEPTION(std::runtime_error, "");
+        THROW_REGISTERED_EXCEPTION(std::runtime_error, "");
 }
 
 void CondiditonalThrowAndCatch()
@@ -45,7 +52,7 @@ void ThrowWithNonConstexprInputIfNonZero(int x)
     {
         std::ostringstream oss;
         oss << "Test";
-        THROW_REGISETERED_EXCEPTION(std::runtime_error, oss.str());
+        THROW_REGISTERED_EXCEPTION(std::runtime_error, oss.str());
     }
 }
 
@@ -53,7 +60,7 @@ void ThrowWithInputValueIfNonZero(int x)
 {
     if (x)
     {
-        THROW_REGISETERED_EXCEPTION(int, x);
+        THROW_REGISTERED_EXCEPTION(int, x);
     }
 }
 
@@ -74,7 +81,7 @@ private:
 void ThrowMyExceptionIfNonZero(int x)
 {
     if (x)
-        THROW_REGISETERED_EXCEPTION(MyException, "My exception");
+        THROW_REGISTERED_EXCEPTION(MyException, "My exception");
 }
 
 class ExceptionForcerFixture
@@ -166,4 +173,19 @@ TEST_CASE_METHOD(ExceptionForcerFixture, "Non constexpr exception can be forced 
     exceptionForcer.ForceException(exceptoinToForce.addr, std::make_exception_ptr(std::runtime_error("Test")));
     REQUIRE_THROWS_AS(ThrowWithNonConstexprInputIfNonZero(0), std::runtime_error);
     exceptionForcer.UnforceException(exceptoinToForce.addr);
+}
+
+TEST_CASE_METHOD(ExceptionForcerFixture, "Can throw from in a template")
+{
+    auto exceptionToForce = GetExceptionInfoByFnName("void ThrowInATemplate<int>(int)");
+    exceptionForcer.ForceException(exceptionToForce.addr);
+    REQUIRE_THROWS_AS(ThrowInATemplate<int>(0), std::runtime_error);
+    REQUIRE_NOTHROW(ThrowInATemplate<long>(0));
+    exceptionForcer.UnforceException(exceptionToForce.addr);
+
+    exceptionToForce = GetExceptionInfoByFnName("void ThrowInATemplate<long>(int)");
+    exceptionForcer.ForceException(exceptionToForce.addr);
+    REQUIRE_NOTHROW(ThrowInATemplate<int>(0));
+    REQUIRE_THROWS_AS(ThrowInATemplate<long>(0), std::runtime_error);
+    exceptionForcer.UnforceException(exceptionToForce.addr);
 }

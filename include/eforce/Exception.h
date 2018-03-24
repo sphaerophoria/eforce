@@ -96,5 +96,5 @@ namespace eforce
  * @param[in] __etype The type of exception to throw
  * @param[in] vaargs Constructor arguments for __etype
  */
-#define THROW_REGISETERED_EXCEPTION(__etype, ...) \
+#define THROW_REGISTERED_EXCEPTION(__etype, ...) \
 	THROW_REGISTERED_EXCEPTION_HELPER(__COUNTER__, __etype, ##__VA_ARGS__)
