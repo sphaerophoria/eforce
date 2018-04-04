@@ -11,9 +11,11 @@
 
 #include <bfd.h>
 #include <cxxabi.h>
+#include <algorithm>
 #include <memory>
 #include <vector>
 
+#include <iostream>
 
 namespace eforce
 {
@@ -31,33 +33,35 @@ namespace eforce
 
     Elf::Function_t Elf::GetContainingFunction(void *offset)
     {
-        auto storage_needed = bfd_get_symtab_upper_bound(m_bfd);
-        std::vector<asymbol*> symbol_table(storage_needed / sizeof(asymbol*), nullptr);
-        auto number_of_symbols = bfd_canonicalize_symtab(m_bfd, &symbol_table[0]);
-        symbol_table.resize(number_of_symbols);
-
-        void* start = nullptr;
-        auto* end = reinterpret_cast<void*>(-1);
-        char const* name = nullptr;
-
-        for (auto const& symbol : symbol_table)
+        if (m_sortedSymbols.empty())
         {
-            if (!(symbol->flags & BSF_FUNCTION))
-                continue; 
+            auto storage_needed = bfd_get_symtab_upper_bound(m_bfd);
+            m_sortedSymbols.resize(storage_needed / sizeof(asymbol*), nullptr);
+            auto number_of_symbols = bfd_canonicalize_symtab(m_bfd, &m_sortedSymbols[0]);
+            m_sortedSymbols.resize(number_of_symbols);
 
+            auto endIt = std::remove_if(m_sortedSymbols.begin(), m_sortedSymbols.end(), [&] (asymbol* symbol) {
+                return !(symbol->flags & BSF_FUNCTION);
+            });
+
+            m_sortedSymbols.erase(endIt, m_sortedSymbols.end());
+
+            std::sort(m_sortedSymbols.begin(), m_sortedSymbols.end(), [](asymbol* a, asymbol* b) {
+                return a->value < b->value;
+            });
+        }
+
+        auto nextFn = std::partition_point(m_sortedSymbols.cbegin(), m_sortedSymbols.cend(), [&] (asymbol* const symbol) {
             // symbol->value is relative to the start of the section, we care
             // about the value relative to the start of the file so we add it
             // to symbol->section->filepos
-            auto value = reinterpret_cast<void*>(symbol->value + symbol->section->filepos);
-            if (value <= offset && value > start)
-            {
-                start = value;
-                name = symbol->name;
-            }
+            return reinterpret_cast<void*>(symbol->value + symbol->section->filepos) < offset;
+        });
 
-            if (value >= offset && value < end)
-                end = value;
-        }
+        auto thisFn = std::prev(nextFn);
+        void* start = reinterpret_cast<void*>((*thisFn)->value + (*thisFn)->section->filepos);
+        char const* name = (*thisFn)->name;
+        void* end = reinterpret_cast<void*>((*nextFn)->value + (*thisFn)->section->filepos);
 
         std::unique_ptr<char, MallocDeleter<char>> demangledName(abi::__cxa_demangle(name, nullptr, nullptr, nullptr));
 
@@ -67,4 +71,5 @@ namespace eforce
             demangledName.get()
         };
     }
+
 } // namespace eforce

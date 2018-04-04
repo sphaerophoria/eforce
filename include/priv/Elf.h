@@ -1,8 +1,10 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 struct bfd;
+struct bfd_symbol;
 
 namespace eforce
 {
@@ -54,7 +56,9 @@ namespace eforce
          * @param[in] offset an address, relative to the start of the file
          */
         Function_t GetContainingFunction(void* offset);
+
     private:
         bfd* m_bfd;
+        std::vector<bfd_symbol*> m_sortedSymbols;
     };
 } // namespace eforce
